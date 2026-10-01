@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp E2EE | Cryptography Flow</title>
+<style>
+:root{
+  --bg:#070a12; --panel:#0e1422; --panel2:#121a2b; --text:#eef4ff; --muted:#8e9bb5;
+  --cyan:#46e6ff; --purple:#9b7cff; --green:#5df2a1; --orange:#ffb86b; --red:#ff6b8a;
+  --line:#27344d;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:
+radial-gradient(circle at 15% 15%,rgba(70,230,255,.10),transparent 28%),
+radial-gradient(circle at 85% 20%,rgba(155,124,255,.12),transparent 30%),
+linear-gradient(145deg,#05070d,#0a0e18 55%,#070a12);color:var(--text);
+font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.container{max-width:1400px;margin:auto;padding:34px 24px 50px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:24px}
+h1{font-size:clamp(28px,4vw,52px);line-height:1;margin:0 0 10px;letter-spacing:-1.8px}
+h1 span{color:var(--cyan)}
+.subtitle{color:var(--muted);max-width:760px;line-height:1.6;margin:0}
+.badge{border:1px solid #26344e;background:rgba(14,20,34,.8);padding:9px 13px;border-radius:999px;color:#b9c6df;font-size:12px;white-space:nowrap}
+.graph-wrap{position:relative;overflow:hidden;border:1px solid #1d2940;border-radius:24px;background:linear-gradient(180deg,rgba(14,20,34,.96),rgba(8,12,21,.96));box-shadow:0 25px 80px rgba(0,0,0,.35)}
+.graph{position:relative;min-height:620px;padding:38px}
+.grid{position:absolute;inset:0;opacity:.18;background-image:linear-gradient(#30405d 1px,transparent 1px),linear-gradient(90deg,#30405d 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent)}
+svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.edge{fill:none;stroke:var(--line);stroke-width:2}
+.edge.active{stroke:var(--cyan);stroke-width:3;filter:drop-shadow(0 0 8px rgba(70,230,255,.7))}
+.packet{fill:var(--cyan);filter:drop-shadow(0 0 7px rgba(70,230,255,.9))}
+.node{position:absolute;width:210px;padding:17px;border:1px solid #273650;border-radius:18px;background:rgba(15,23,39,.93);backdrop-filter:blur(10px);cursor:pointer;transition:.25s transform,.25s border-color,.25s box-shadow;z-index:2}
+.node:hover,.node.selected{transform:translateY(-5px);border-color:var(--cyan);box-shadow:0 12px 35px rgba(0,0,0,.35),0 0 28px rgba(70,230,255,.08)}
+.node .icon{font-size:22px;margin-bottom:9px}
+.node strong{display:block;font-size:15px;margin-bottom:5px}
+.node small{color:var(--muted);line-height:1.45}
+.n1{left:4%;top:18%}.n2{left:4%;top:61%}
+.n3{left:31%;top:39%}.n4{left:48%;top:14%}.n5{left:48%;top:60%}
+.n6{right:4%;top:39%}.n7{right:4%;top:70%}
+.server{left:48%;top:39%;transform:translateX(-50%);width:225px;border-color:#5c4b91;background:linear-gradient(145deg,rgba(32,25,55,.96),rgba(14,20,34,.96))}
+.server:hover,.server.selected{transform:translate(-50%,-5px);border-color:var(--purple);box-shadow:0 0 35px rgba(155,124,255,.12)}
+.key{display:inline-block;margin-top:9px;padding:4px 7px;border-radius:7px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;background:#0a1020;color:var(--green);border:1px solid #1d4c3a}
+.panel{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:18px}
+.info,.steps{border:1px solid #1d2940;background:rgba(14,20,34,.8);border-radius:20px;padding:22px}
+.info h2,.steps h2{font-size:18px;margin:0 0 9px}.info p{color:var(--muted);line-height:1.65;margin:0}
+.details{margin-top:15px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{padding:12px;border-radius:12px;background:#0a1020;border:1px solid #1b2940}.stat b{display:block;font-size:13px}.stat span{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.step{display:flex;gap:11px;padding:10px 0;border-bottom:1px solid #1a2538;color:#aeb9ce;font-size:13px;line-height:1.45}.step:last-child{border:0}.num{min-width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:#15223a;color:var(--cyan);font-weight:700}
+.controls{display:flex;gap:8px;margin-top:15px;flex-wrap:wrap}
+button{border:1px solid #2a3954;background:#111a2c;color:#dce7fb;padding:9px 13px;border-radius:10px;cursor:pointer}button:hover{border-color:var(--cyan)}button.primary{background:#123044;border-color:#276b82}
+.note{font-size:11px;color:#73819b;margin-top:16px;line-height:1.5}
+@media(max-width:900px){
+ .graph{min-height:1050px}.node{width:190px}.n1{left:4%;top:7%}.n2{left:4%;top:31%}.n3{left:50%;top:22%;transform:translateX(-50%)}.n4{left:50%;top:48%;transform:translateX(-50%)}.n5{left:50%;top:68%;transform:translateX(-50%)}.server{left:50%;top:35%}.n6{right:4%;top:49%}.n7{right:4%;top:78%}
+ .panel{grid-template-columns:1fr}
+}
+@media(max-width:620px){header{align-items:flex-start;flex-direction:column}.container{padding:24px 14px}.graph{padding:18px;min-height:1120px}.node{width:165px}.n1{left:3%;top:5%}.n2{left:3%;top:27%}.n3{top:19%}.n4{top:45%}.server{top:33%}.n5{top:64%}.n6{right:3%;top:48%}.n7{right:3%;top:79%}.details{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div>
+    <h1>WhatsApp <span>E2EE</span> Flow</h1>
+    <p class="subtitle">An interactive educational graph showing how a message can move from Alice to Bob while the server relays ciphertext instead of reading the message.</p>
+  </div>
+  <div class="badge">Signal Protocol • Double Ratchet • DH • Symmetric Encryption</div>
+</header>
+
+<section class="graph-wrap">
+<div class="graph" id="graph">
+<div class="grid"></div>
+<svg viewBox="0 0 1400 620" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#46e6ff"/></marker></defs>
+<path class="edge" d="M180 170 C350 170 390 270 500 300" marker-end="url(#arrow)"/>
+<path class="edge" d="M180 430 C350 430 390 350 500 320" marker-end="url(#arrow)"/>
+<path class="edge" d="M530 250 C560 205 650 160 720 135" marker-end="url(#arrow)"/>
+<path class="edge" d="M720 185 C720 250 720 310 700 355" marker-end="url(#arrow)"/>
+<path class="edge" d="M815 315 C930 300 1030 290 1160 290" marker-end="url(#arrow)"/>
+<path class="edge" d="M815 410 C960 430 1040 480 1160 480" marker-end="url(#arrow)"/>
+<path class="edge" d="M1160 330 C1050 365 940 375 815 380" marker-end="url(#arrow)"/>
+<circle class="packet" r="5"><animateMotion dur="2.4s" repeatCount="indefinite" path="M180 170 C350 170 390 270 500 300"/></circle>
+<circle class="packet" r="5"><animateMotion dur="3s" repeatCount="indefinite" path="M815 315 C930 300 1030 290 1160 290"/></circle>
+<circle class="packet" r="5"><animateMotion dur="2.7s" repeatCount="indefinite" path="M1160 330 C1050 365 940 375 815 380"/></circle>
+</svg>
+
+<div class="node n1" data-title="Alice: Identity Key Pair" data-text="Alice has a long-term identity key pair. The public key can be shared; the private key stays on her device." data-color="green">
+<div class="icon">👩‍💻</div><strong>Alice</strong><small>Identity key pair</small><span class="key">PUBLIC + PRIVATE</span></div>
+
+<div class="node n2" data-title="Bob: Identity Key Pair" data-text="Bob also has a long-term identity key pair. His private key remains on his device." data-color="green">
+<div class="icon">🧑‍💻</div><strong>Bob</strong><small>Identity key pair</small><span class="key">PUBLIC + PRIVATE</span></div>
+
+<div class="node n3" data-title="Diffie-Hellman Key Agreement" data-text="DH-style key agreement combines private and public key material to establish shared secret material without sending that secret directly." data-color="cyan">
+<div class="icon">🔑</div><strong>Diffie-Hellman</strong><small>Shared secret material</small><span class="key">K = DH(a,B) = DH(b,A)</span></div>
+
+<div class="node n4" data-title="Signal Protocol" data-text="The Signal Protocol family provides the session framework and authenticated key material used for end-to-end encrypted conversations." data-color="purple">
+<div class="icon">🛡️</div><strong>Signal Protocol</strong><small>Session establishment</small><span class="key">AUTHENTICATED SESSION</span></div>
+
+<div class="node server" data-title="WhatsApp Server" data-text="The server acts as a relay. In an end-to-end encrypted conversation, it can transport ciphertext and protocol data but is not given the message plaintext." data-color="purple">
+<div class="icon">☁️</div><strong>WhatsApp Server</strong><small>Relay only</small><span class="key">CIPHERTEXT</span></div>
+
+<div class="node n5" data-title="Double Ratchet" data-text="The Double Ratchet derives fresh message-key material as the conversation progresses, helping provide forward secrecy and post-compromise security." data-color="orange">
+<div class="icon">🔄</div><strong>Double Ratchet</strong><small>Fresh keys over time</small><span class="key">MESSAGE KEYₙ</span></div>
+
+<div class="node n6" data-title="Symmetric Message Encryption" data-text="For this educational model, the message is shown as being protected by a symmetric AES-256 layer using derived message-key material." data-color="cyan">
+<div class="icon">🔐</div><strong>AES-256</strong><small>Encrypt message</small><span class="key">PLAINTEXT → CIPHERTEXT</span></div>
+
+<div class="node n7" data-title="Bob Decrypts" data-text="Bob's device derives the corresponding message-key material and decrypts the ciphertext locally. The plaintext is never sent to the relay server." data-color="green">
+<div class="icon">📨</div><strong>Bob's Device</strong><small>Decrypt locally</small><span class="key">CIPHERTEXT → TEXT</span></div>
+</div>
+</section>
+
+<section class="panel">
+<div class="info">
+<h2 id="infoTitle">Click a graph node</h2>
+<p id="infoText">Select any component to see what it does in the simplified end-to-end encryption flow.</p>
+<div class="details">
+<div class="stat"><b>Private keys</b><span>Stay on user devices</span></div>
+<div class="stat"><b>Server role</b><span>Relay encrypted data</span></div>
+<div class="stat"><b>Key evolution</b><span>Fresh message keys</span></div>
+</div>
+<div class="controls">
+<button class="primary" id="playBtn">▶ Replay flow</button>
+<button id="resetBtn">Reset selection</button>
+</div>
+<div class="note">Educational visualization only. Real WhatsApp cryptographic implementation details are more complex and can change over time. “AES-256” here is used as a simplified symmetric-encryption illustration, not a complete specification of WhatsApp's current implementation.</div>
+</div>
+
+<div class="steps">
+<h2>Message flow</h2>
+<div class="step"><span class="num">1</span><span>Identity keys authenticate the participants and provide public key material.</span></div>
+<div class="step"><span class="num">2</span><span>DH-based key agreement contributes shared secret material to the session.</span></div>
+<div class="step"><span class="num">3</span><span>The Signal Protocol session derives cryptographic state.</span></div>
+<div class="step"><span class="num">4</span><span>The Double Ratchet advances keys as messages are sent.</span></div>
+<div class="step"><span class="num">5</span><span>A fresh message key protects the plaintext before transmission.</span></div>
+<div class="step"><span class="num">6</span><span>The server relays ciphertext; Bob decrypts on his device.</span></div>
+</div>
+</section>
+</div>
+
+<script>
+const nodes=[...document.querySelectorAll('.node')];
+const title=document.getElementById('infoTitle'), text=document.getElementById('infoText');
+nodes.forEach(node=>{
+  node.addEventListener('click',()=>{
+    nodes.forEach(n=>n.classList.remove('selected'));
+    node.classList.add('selected');
+    title.textContent=node.dataset.title;
+    text.textContent=node.dataset.text;
+  });
+});
+document.getElementById('resetBtn').onclick=()=>{
+  nodes.forEach(n=>n.classList.remove('selected'));
+  title.textContent='Click a graph node';
+  text.textContent='Select any component to see what it does in the simplified end-to-end encryption flow.';
+};
+document.getElementById('playBtn').onclick=()=>{
+  nodes.forEach(n=>n.classList.remove('selected'));
+  let i=0;
+  const timer=setInterval(()=>{
+    if(i>0) nodes[i-1].classList.remove('selected');
+    if(i<nodes.length){nodes[i].classList.add('selected');title.textContent=nodes[i].dataset.title;text.textContent=nodes[i].dataset.text;i++}
+    else clearInterval(timer);
+  },650);
+};
+</script>
+</body>
+</html>
